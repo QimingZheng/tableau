@@ -3,6 +3,7 @@
 #include <assert.h>
 
 #include <algorithm>
+#include <cstring>
 
 typedef int64_t tableau_index_t;
 typedef int64_t tableau_size_t;
@@ -234,6 +235,9 @@ class Tableau {
     for (tableau_index_t col = 0; col < columns_; col++)
       Col(col)->Add(other->Col(col));
   }
+
+  template <typename U>
+  friend class List;
 
  private:
   void SetRow(tableau_index_t row, List<T>* list) {
