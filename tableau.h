@@ -189,6 +189,7 @@ class List {
   tableau_size_t capacity_ = 0;
   tableau_index_t* index_ = nullptr;
   T* data_ = nullptr;
+
   tableau_index_t BinarySearch(tableau_index_t index) {
     tableau_index_t lower = 0, upper = size_ - 1;
     while (lower <= upper) {
@@ -217,19 +218,11 @@ class Tableau {
     col_heads_ = new List<T>*[columns];
     for (tableau_size_t i = 0; i < columns; i++) col_heads_[i] = new List<T>();
   }
+
   T At(tableau_index_t row, tableau_index_t col) { return Row(row)->At(col); }
 
   List<T>* Row(tableau_index_t row) const { return row_heads_[row]; }
   List<T>* Col(tableau_index_t col) const { return col_heads_[col]; }
-
-  void SetRow(tableau_index_t row, List<T>* list) {
-    delete row_heads_[row];
-    row_heads_[row] = list;
-  }
-  void SetCol(tableau_index_t col, List<T>* list) {
-    delete col_heads_[col];
-    col_heads_[col] = list;
-  }
 
   void Add(const Tableau<T>* other) {
     assert(rows_ == other->rows_);
@@ -243,6 +236,14 @@ class Tableau {
   }
 
  private:
+  void SetRow(tableau_index_t row, List<T>* list) {
+    delete row_heads_[row];
+    row_heads_[row] = list;
+  }
+  void SetCol(tableau_index_t col, List<T>* list) {
+    delete col_heads_[col];
+    col_heads_[col] = list;
+  }
   tableau_size_t rows_, columns_;
   List<T>** row_heads_;
   List<T>** col_heads_;
