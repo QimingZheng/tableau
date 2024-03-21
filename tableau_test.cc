@@ -14,6 +14,22 @@ TEST(List, Append) {
   }
 }
 
+TEST(List, Set) {
+  List<T> list;
+  for (auto i = 0; i < 10; i += 1) {
+    list.Append(i, i + 1);
+  }
+  for (auto i = 0; i < 10; i += 1) {
+    EXPECT_EQ(list.At(i), i + 1);
+    list.Set(i, -1);
+    EXPECT_EQ(list.At(i), -1);
+  }
+  for (auto i = 10; i < 20; i += 1) {
+    list.Set(i, -1);
+    EXPECT_EQ(list.At(i), 0);
+  }
+}
+
 TEST(List, Iterator) {
   List<T> list;
   for (auto i = 0; i < 1024; i += 1) list.Append(i, i + 1);

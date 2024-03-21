@@ -65,19 +65,15 @@ class List {
   }
 
   T At(tableau_index_t index) {
-    tableau_index_t lower = 0, upper = size_ - 1;
-    while (lower <= upper) {
-      tableau_index_t middle = (lower + upper) / 2;
-      if (index_[middle] == index) {
-        return data_[middle];
-      }
-      if (index_[middle] > index) {
-        upper = middle - 1;
-      } else {
-        lower = middle + 1;
-      }
-    }
+    tableau_index_t pos = BinarySearch(index);
+    if (pos >= 0) return data_[pos];
     return 0;
+  }
+
+  /* Set the element at index, if no element is at index, skip. */
+  void Set(tableau_index_t index, T value) {
+    tableau_index_t pos = BinarySearch(index);
+    if (pos >= 0) data_[pos] = value;
   }
 
   void Add(const List<T>* other) {
@@ -193,6 +189,21 @@ class List {
   tableau_size_t capacity_ = 0;
   tableau_index_t* index_ = nullptr;
   T* data_ = nullptr;
+  tableau_index_t BinarySearch(tableau_index_t index) {
+    tableau_index_t lower = 0, upper = size_ - 1;
+    while (lower <= upper) {
+      tableau_index_t middle = (lower + upper) / 2;
+      if (index_[middle] == index) {
+        return middle;
+      }
+      if (index_[middle] > index) {
+        upper = middle - 1;
+      } else {
+        lower = middle + 1;
+      }
+    }
+    return -1;
+  }
 };
 
 /* A Simplex Tableau. */
@@ -224,13 +235,11 @@ class Tableau {
     assert(rows_ == other->rows_);
     assert(columns_ == other->columns_);
 
-    for (tableau_index_t row = 0; row < rows_; row++) {
+    for (tableau_index_t row = 0; row < rows_; row++)
       Row(row)->Add(other->Row(row));
-    }
 
-    for (tableau_index_t col = 0; col < columns_; col++) {
+    for (tableau_index_t col = 0; col < columns_; col++)
       Col(col)->Add(other->Col(col));
-    }
   }
 
  private:
