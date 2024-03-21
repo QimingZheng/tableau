@@ -1,6 +1,8 @@
 #pragma once
 
 #include <assert.h>
+#include <omp.h>
+#include <pthread.h>
 
 #include <algorithm>
 #include <cstring>
@@ -11,7 +13,9 @@ typedef int64_t tableau_size_t;
 template <typename T>
 class Tableau;
 
-/* A list is the abstraction of a row or column in a simplex tableau. */
+/**
+ * A list is the abstraction of a row or column in a simplex tableau.
+ */
 template <typename T>
 class List {
  public:
@@ -142,9 +146,12 @@ class List {
   template <typename R>
   List<R>* Map(R (*transform)(const T&)) const {
     List<R>* list = new List<R>(Size());
+#pragma omp parallel for
     for (tableau_index_t i = 0; i < Size(); i++) {
-      list->Append(index_[i], transform(data_[i]));
+      list->index_[i] = index_[i];
+      list->data_[i] = transform(data_[i]);
     }
+    list->size_ = Size();
     return list;
   }
 
@@ -215,8 +222,10 @@ class Tableau {
   Tableau(tableau_size_t rows, tableau_size_t columns)
       : rows_(rows), columns_(columns) {
     row_heads_ = new List<T>*[rows];
+#pragma omp parallel for
     for (tableau_size_t i = 0; i < rows; i++) row_heads_[i] = new List<T>();
     col_heads_ = new List<T>*[columns];
+#pragma omp parallel for
     for (tableau_size_t i = 0; i < columns; i++) col_heads_[i] = new List<T>();
   }
 
@@ -229,9 +238,11 @@ class Tableau {
     assert(rows_ == other->rows_);
     assert(columns_ == other->columns_);
 
+#pragma omp parallel for
     for (tableau_index_t row = 0; row < rows_; row++)
       Row(row)->Add(other->Row(row));
 
+#pragma omp parallel for
     for (tableau_index_t col = 0; col < columns_; col++)
       Col(col)->Add(other->Col(col));
   }
@@ -257,6 +268,7 @@ template <typename T>
 Tableau<T>* List<T>::Cross(const List<T>* other, tableau_size_t rows,
                            tableau_size_t cols) const {
   Tableau<T>* tableau = new Tableau<T>(rows, cols);
+#pragma omp parallel for
   for (tableau_index_t i = 0; i < Size(); i++) {
     List<T>* row = new List<T>(other);
     tableau_index_t index = index_[i];
@@ -264,6 +276,7 @@ Tableau<T>* List<T>::Cross(const List<T>* other, tableau_size_t rows,
     row->Scale(scale);
     tableau->SetRow(index, row);
   }
+#pragma omp parallel for
   for (tableau_index_t i = 0; i < other->Size(); i++) {
     List<T>* col = new List<T>(other);
     tableau_index_t index = other->index_[i];

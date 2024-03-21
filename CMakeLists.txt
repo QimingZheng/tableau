@@ -24,23 +24,20 @@ include_directories(headers ${HEADERS})
 
 enable_testing()
 
-foreach(test_src ${TEST_SRCS})
-  string(FIND ${test_src} "/" start REVERSE)
-  string(FIND ${test_src} ".cc" end)
-  MATH(EXPR begin "${start}+1")
-  MATH(EXPR length "${end}-${start}-1")
-  string(SUBSTRING ${test_src} ${begin} ${length} test_name)
-  add_executable(
-    ${test_name}
-    ${test_src}
-  )
-  target_include_directories(${test_name} PRIVATE headers)
-  target_link_libraries(
-    ${test_name}
-    GTest::GTest
-  )
-  add_test(
-    NAME ${test_name}
-    COMMAND ${test_name}
-  )
-endforeach()
+add_executable(
+  tableau_test
+  tableau_test.cc
+)
+target_include_directories(tableau_test PRIVATE headers)
+target_link_libraries(
+  tableau_test
+  GTest::GTest
+)
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(tableau_test OpenMP::OpenMP_CXX)
+endif()
+add_test(
+  NAME tableau_test
+  COMMAND tableau_test
+)
