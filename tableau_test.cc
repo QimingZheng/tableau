@@ -117,12 +117,13 @@ TEST(List, Cross) {
   List<T> list1, list2;
   for (auto i = 0; i < 16; i += 1) {
     list1.Append(i, i);
-    list2.Append(i, i);
+    list2.Append(i, 1);
   }
   Tableau<T> *result = list1.Cross(&list2, 16, 16);
   for (auto i = 0; i < 16; i++) {
     for (auto j = 0; j < 16; j++) {
-      EXPECT_EQ(result->At(i, j), i * j);
+      EXPECT_EQ(result->Row(i)->At(j), i);
+      EXPECT_EQ(result->Col(j)->At(i), i);
     }
   }
 }

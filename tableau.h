@@ -278,7 +278,7 @@ Tableau<T>* List<T>::Cross(const List<T>* other, tableau_size_t rows,
   }
 #pragma omp parallel for
   for (tableau_index_t i = 0; i < other->Size(); i++) {
-    List<T>* col = new List<T>(other);
+    List<T>* col = new List<T>(this);
     tableau_index_t index = other->index_[i];
     T scale = other->data_[i];
     col->Scale(scale);
