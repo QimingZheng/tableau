@@ -276,6 +276,21 @@ class Tableau {
   template <typename U>
   friend class List;
 
+  void AppendRow(tableau_index_t row, List<T>* list) {
+    row_heads_[row] = list;
+    for (auto iter = list->Begin(); iter->IsEnd() == false;
+         iter = iter->Next()) {
+      Col(iter->Index())->Append(row, iter->Data());
+    }
+  }
+  void AppendCol(tableau_index_t col, List<T>* list) {
+    col_heads_[col] = list;
+    for (auto iter = list->Begin(); iter->IsEnd() == false;
+         iter = iter->Next()) {
+      Row(iter->Index())->Append(col, iter->Data());
+    }
+  }
+
  private:
   void SetRow(tableau_index_t row, List<T>* list) {
     delete row_heads_[row];

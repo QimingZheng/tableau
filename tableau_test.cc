@@ -1,7 +1,7 @@
+#include "tableau.h"
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
-#include "tableau.h"
 
 typedef float T;
 
@@ -160,6 +160,38 @@ TEST(Tableau, Add) {
   for (auto i = 0; i < 16; i++) {
     for (auto j = 0; j < 16; j++) {
       EXPECT_EQ(tableau1->At(i, j), j + 1);
+    }
+  }
+}
+
+TEST(Tableau, AppendRow) {
+  Tableau<T> *tableau = new Tableau<T>(16, 16);
+  for (auto i = 0; i < 16; i++) {
+    List<T> *list = new List<T>();
+    for (auto j = 0; j < 16; j++) {
+      list->Append(j, i + j);
+    }
+    tableau->AppendRow(i, list);
+  }
+  for (auto i = 0; i < 16; i++) {
+    for (auto j = 0; j < 16; j++) {
+      EXPECT_EQ(tableau->At(i, j), i + j);
+    }
+  }
+}
+
+TEST(Tableau, AppendCol) {
+  Tableau<T> *tableau = new Tableau<T>(16, 16);
+  for (auto i = 0; i < 16; i++) {
+    List<T> *list = new List<T>();
+    for (auto j = 0; j < 16; j++) {
+      list->Append(j, i + j);
+    }
+    tableau->AppendCol(i, list);
+  }
+  for (auto i = 0; i < 16; i++) {
+    for (auto j = 0; j < 16; j++) {
+      EXPECT_EQ(tableau->At(i, j), i + j);
     }
   }
 }
