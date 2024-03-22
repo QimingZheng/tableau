@@ -1,7 +1,7 @@
-#include "tableau.h"
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
+#include "tableau.h"
 
 typedef float T;
 
@@ -78,6 +78,18 @@ TEST(List, Add) {
   for (auto i = 0; i < 1024; i++) {
     EXPECT_EQ(list1.At(2 * i), i + 1);
     EXPECT_EQ(list1.At(2 * i + 1), i + 1);
+  }
+}
+
+TEST(List, Add2) {
+  List<T> list1, list2;
+  for (auto i = 0; i < 1024; i += 1) list1.Append(512 + i, i % 2);
+  for (auto i = 0; i < 512; i += 1) list2.Append(i, i % 2);
+
+  list1.Add(&list2);
+
+  for (auto i = 0; i < 1024 + 512; i++) {
+    EXPECT_EQ(list1.At(i), i % 2);
   }
 }
 

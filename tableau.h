@@ -83,8 +83,8 @@ class List {
 
   void Add(const List<T>* other) {
     capacity_ = Size() + other->Size();
-    tableau_index_t* merged_index = new tableau_index_t[Size() + other->Size()];
-    T* merged_data = new T[Size() + other->Size()];
+    tableau_index_t* merged_index = new tableau_index_t[capacity_];
+    T* merged_data = new T[capacity_];
     tableau_index_t left_index = 0, right_index = 0, next_index = 0;
 
     while (left_index < Size() && right_index < other->Size()) {
@@ -104,7 +104,7 @@ class List {
       }
       next_index++;
     }
-    while (left_index < other->Size()) {
+    while (left_index < Size()) {
       merged_data[next_index] = data_[left_index];
       merged_index[next_index] = index_[left_index];
       next_index++;
