@@ -93,6 +93,26 @@ TEST(List, Add2) {
   }
 }
 
+TEST(List, Mul) {
+  List<T> list1, list2;
+  for (auto i = 0; i < 1024; i += 1) list1.Append(512 + i, i % 2);
+  for (auto i = 0; i < 512; i += 1) list2.Append(i, i % 2);
+
+  list1.Mul(&list2);
+  EXPECT_EQ(list1.Size(), 0);
+}
+
+TEST(List, Mul2) {
+  List<T> list1, list2;
+  for (auto i = 0; i < 512; i += 1) list1.Append(i, i);
+  for (auto i = 0; i < 512; i += 1) list2.Append(i, i);
+
+  list1.Mul(&list2);
+  for (auto i = 0; i < 512; i++) {
+    EXPECT_EQ(list1.At(i), i * i);
+  }
+}
+
 TEST(List, Product) {
   List<T> list1, list2;
   for (auto i = 0; i < 1024; i += 1) {

@@ -123,6 +123,32 @@ class List {
     data_ = merged_data;
   }
 
+  void Mul(const List<T>* other) {
+    capacity_ = std::min(Size(), other->Size());
+    tableau_index_t* merged_index = new tableau_index_t[capacity_];
+    T* merged_data = new T[capacity_];
+    tableau_index_t left_index = 0, right_index = 0, next_index = 0;
+
+    while (left_index < Size() && right_index < other->Size()) {
+      if (index_[left_index] == other->index_[right_index]) {
+        merged_data[next_index] = data_[left_index] * other->data_[right_index];
+        merged_index[next_index] = index_[left_index];
+        left_index++;
+        right_index++;
+        next_index++;
+      } else if (index_[left_index] < other->index_[right_index]) {
+        left_index++;
+      } else {
+        right_index++;
+      }
+    }
+    size_ = next_index;
+    delete index_;
+    delete data_;
+    index_ = merged_index;
+    data_ = merged_data;
+  }
+
   void Scale(const T scale) {
     for (tableau_index_t i = 0; i < size_; i++) data_[i] *= scale;
   }
