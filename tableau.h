@@ -291,6 +291,9 @@ class Tableau {
     }
   }
 
+  tableau_size_t Rows() const { return rows_; }
+  tableau_size_t Cols() const { return columns_; }
+
  private:
   void SetRow(tableau_index_t row, List<T>* list) {
     delete row_heads_[row];
