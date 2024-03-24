@@ -119,7 +119,8 @@ static void List_Reduce(benchmark::State& state) {
 BENCHMARK(List_Reduce)->Apply(CustomArguments);
 
 static void List_Cross(benchmark::State& state) {
-  tableau_size_t sparse_element_size = 128;
+  tableau_size_t sparse_element_size = state.range(0);
+  tableau_size_t sparse_array_size = state.range(1);
   List<T>* list1 = new List<T>(sparse_element_size);
   List<T>* list2 = new List<T>(sparse_element_size);
   for (auto i = 0; i < sparse_element_size; i++) {
@@ -134,7 +135,7 @@ static void List_Cross(benchmark::State& state) {
   delete list1;
   delete list2;
 }
-BENCHMARK(List_Cross);
+BENCHMARK(List_Cross)->Apply(CustomArguments);
 
 static void CustomTableauArguments1(benchmark::internal::Benchmark* b) {
   for (tableau_size_t row = 1000; row <= 10000000; row = row * 10)
