@@ -286,6 +286,16 @@ class Tableau {
 #pragma omp parallel for
     for (tableau_size_t i = 0; i < columns; i++) col_heads_[i] = new List<T>();
   }
+  ~Tableau() {
+    for (auto i = 0; i < rows_; i++) {
+      delete row_heads_[i];
+    }
+    for (auto i = 0; i < columns_; i++) {
+      delete col_heads_[i];
+    }
+    delete row_heads_;
+    delete col_heads_;
+  }
 
   T At(tableau_index_t row, tableau_index_t col) { return Row(row)->At(col); }
 

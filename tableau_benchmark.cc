@@ -136,4 +136,49 @@ static void List_Cross(benchmark::State& state) {
 }
 BENCHMARK(List_Cross);
 
+static void CustomTableauArguments1(benchmark::internal::Benchmark* b) {
+  for (tableau_size_t row = 1000; row <= 10000000; row = row * 10)
+    for (tableau_size_t col = 1000; col <= 10000000; col *= 10)
+      b->Args({row, col});
+}
+
+static void Tableau_Constructor(benchmark::State& state) {
+  tableau_size_t row = state.range(0);
+  tableau_size_t col = state.range(1);
+  for (auto _ : state) {
+    Tableau<T>* tableau = new Tableau<T>(row, col);
+    delete tableau;
+  }
+}
+BENCHMARK(Tableau_Constructor)->Apply(CustomTableauArguments1);
+
+static void CustomTableauArguments2(benchmark::internal::Benchmark* b) {
+  for (tableau_size_t row = 1000; row <= 10000000; row = row * 10)
+    for (tableau_size_t col = 1000; col <= 10000000; col *= 10)
+      for (tableau_size_t row_element_size = col / 1000;
+           row_element_size < col / 100; row_element_size *= 10)
+        for (tableau_size_t col_element_size = row / 1000;
+             col_element_size < row / 100; col_element_size *= 10)
+          b->Args({row, col, row_element_size, col_element_size});
+}
+
+static void Tableau_AppendRow(benchmark::State& state) {
+  tableau_size_t row = state.range(0);
+  tableau_size_t col = state.range(1);
+  tableau_size_t row_element_size = state.range(2);
+  tableau_size_t col_element_size = state.range(3);
+  for (auto _ : state) {
+    Tableau<T>* tableau = new Tableau<T>(row, col);
+    for (auto i = 0; i < col_element_size; i++) {
+      List<T>* list = new List<T>(row_element_size);
+      for (auto i = 0; i < row_element_size; i++) {
+        list->Append(i * (col / row_element_size), i);
+      }
+      tableau->AppendRow(i, list);
+    }
+    delete tableau;
+  }
+}
+BENCHMARK(Tableau_AppendRow)->Apply(CustomTableauArguments2);
+
 BENCHMARK_MAIN();
