@@ -61,6 +61,9 @@ TEST(List, Reduce) {
   auto result = list.Reduce(reduce, {-1, 100000000.0f});
   EXPECT_EQ(result.first, 0);
   EXPECT_EQ(result.second, 1.0f);
+  result = list.Reduce(List<T>::MinReduce, {-1, 100000000.0f});
+  EXPECT_EQ(result.first, 0);
+  EXPECT_EQ(result.second, 1.0f);
 }
 
 TEST(List, Add) {

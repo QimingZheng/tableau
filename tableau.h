@@ -182,6 +182,9 @@ class List {
   }
 
   typedef std::pair<tableau_index_t, T> ReduceStruct;
+  static ReduceStruct MinReduce(const ReduceStruct& a, const ReduceStruct& b) {
+    return (b.second < a.second) ? b : a;
+  }
 
   ReduceStruct Reduce(ReduceStruct (*reduce)(const ReduceStruct&,
                                              const ReduceStruct&),
@@ -214,6 +217,14 @@ class List {
     index_[size_] = index;
     data_[size_] = value;
     size_ += 1;
+  }
+  void Pop(tableau_index_t last_index = -1) {
+    if (size_ > 0) {
+      if (last_index > 0) {
+        if (index_[size_ - 1] != last_index) return;
+      }
+      size_ -= 1;
+    }
   }
 
   friend class Iterator;
@@ -288,6 +299,27 @@ class Tableau {
     for (auto iter = list->Begin(); iter->IsEnd() == false;
          iter = iter->Next()) {
       Row(iter->Index())->Append(col, iter->Data());
+    }
+  }
+
+  void AppendExtraCol(List<T>* list) {
+    List<T>** new_col_heads = new List<T>*[columns_ + 1];
+    for (auto i = 0; i < columns_; i++) new_col_heads[i] = col_heads_[i];
+    new_col_heads[columns_] = list;
+    delete col_heads_;
+    col_heads_ = new_col_heads;
+    columns_ += 1;
+    for (auto iter = list->Begin(); iter->IsEnd() == false;
+         iter = iter->Next()) {
+      Row(iter->Index())->Append(columns_ - 1, iter->Data());
+    }
+  }
+  void RemoveExtraCol() {
+    auto last_col = col_heads_[columns_ - 1];
+    columns_ -= 1;
+    for (auto iter = last_col->Begin(); iter->IsEnd() == false;
+         iter = iter->Next()) {
+      Row(iter->Index())->Pop(columns_);
     }
   }
 
