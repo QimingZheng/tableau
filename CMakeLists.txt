@@ -13,7 +13,15 @@ FetchContent_Declare(
   googletest
   URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
 )
-FetchContent_MakeAvailable(googletest)
+FetchContent_Declare(
+  googlebenchmark
+  URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.zip
+)
+FetchContent_MakeAvailable(
+  googletest
+  googlebenchmark
+)
+
 add_library(GTest::GTest INTERFACE IMPORTED)
 target_link_libraries(GTest::GTest INTERFACE gtest_main gmock_main)
 
@@ -21,6 +29,9 @@ file(GLOB HEADERS *.h)
 file(GLOB TEST_SRCS *_test.cc)
 
 include_directories(headers ${HEADERS})
+
+add_executable(tableau_benchmark tableau_benchmark.cc)
+target_link_libraries(tableau_benchmark benchmark::benchmark)
 
 enable_testing()
 
@@ -40,4 +51,9 @@ endif()
 add_test(
   NAME tableau_test
   COMMAND tableau_test
+)
+
+add_test(
+  NAME tableau_benchmark
+  COMMAND tableau_benchmark
 )

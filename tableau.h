@@ -69,6 +69,8 @@ class List {
     std::memcpy(data_, other->data_, sizeof(T) * capacity_);
   }
 
+  void Clear() { size_ = 0; }
+
   T At(tableau_index_t index) {
     tableau_index_t pos = BinarySearch(index);
     if (pos >= 0) return data_[pos];
@@ -82,6 +84,7 @@ class List {
   }
 
   void Add(const List<T>* other) {
+    if (other->Size() == 0) return;
     capacity_ = Size() + other->Size();
     tableau_index_t* merged_index = new tableau_index_t[capacity_];
     T* merged_data = new T[capacity_];
@@ -89,31 +92,45 @@ class List {
 
     while (left_index < Size() && right_index < other->Size()) {
       if (index_[left_index] == other->index_[right_index]) {
-        merged_data[next_index] = data_[left_index] + other->data_[right_index];
-        merged_index[next_index] = index_[left_index];
+        T sum = data_[left_index] + other->data_[right_index];
+        if (sum != 0) {
+          merged_data[next_index] =
+              data_[left_index] + other->data_[right_index];
+          merged_index[next_index] = index_[left_index];
+          next_index++;
+        }
         left_index++;
         right_index++;
       } else if (index_[left_index] < other->index_[right_index]) {
-        merged_data[next_index] = data_[left_index];
-        merged_index[next_index] = index_[left_index];
+        if (data_[left_index] != 0) {
+          merged_data[next_index] = data_[left_index];
+          merged_index[next_index] = index_[left_index];
+          next_index++;
+        }
         left_index++;
       } else {
-        merged_data[next_index] = other->data_[right_index];
-        merged_index[next_index] = other->index_[right_index];
+        if (other->data_[right_index] != 0) {
+          merged_data[next_index] = other->data_[right_index];
+          merged_index[next_index] = other->index_[right_index];
+          next_index++;
+        }
         right_index++;
       }
-      next_index++;
     }
     while (left_index < Size()) {
-      merged_data[next_index] = data_[left_index];
-      merged_index[next_index] = index_[left_index];
-      next_index++;
+      if (data_[left_index] != 0) {
+        merged_data[next_index] = data_[left_index];
+        merged_index[next_index] = index_[left_index];
+        next_index++;
+      }
       left_index++;
     }
     while (right_index < other->Size()) {
-      merged_data[next_index] = other->data_[right_index];
-      merged_index[next_index] = other->index_[right_index];
-      next_index++;
+      if (other->data_[right_index] != 0) {
+        merged_data[next_index] = other->data_[right_index];
+        merged_index[next_index] = other->index_[right_index];
+        next_index++;
+      }
       right_index++;
     }
     size_ = next_index;
@@ -131,11 +148,15 @@ class List {
 
     while (left_index < Size() && right_index < other->Size()) {
       if (index_[left_index] == other->index_[right_index]) {
-        merged_data[next_index] = data_[left_index] * other->data_[right_index];
-        merged_index[next_index] = index_[left_index];
+        T prod = data_[left_index] * other->data_[right_index];
+        if (prod != 0) {
+          merged_data[next_index] =
+              data_[left_index] * other->data_[right_index];
+          merged_index[next_index] = index_[left_index];
+          next_index++;
+        }
         left_index++;
         right_index++;
-        next_index++;
       } else if (index_[left_index] < other->index_[right_index]) {
         left_index++;
       } else {
@@ -206,8 +227,8 @@ class List {
       T* new_data = new T[capacity_];
       tableau_index_t* new_index = new tableau_index_t[capacity_];
 
-      std::memcpy(new_index, index_, sizeof(tableau_index_t) * capacity_);
-      std::memcpy(new_data, data_, sizeof(T) * capacity_);
+      std::memcpy(new_index, index_, sizeof(tableau_index_t) * size_);
+      std::memcpy(new_data, data_, sizeof(T) * size_);
 
       delete index_;
       delete data_;
