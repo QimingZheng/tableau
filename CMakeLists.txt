@@ -7,6 +7,7 @@ project(
 
 set (CMAKE_CXX_STANDARD 17)
 string(REPLACE "-DNDEBUG" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+SET(GCC_COVERAGE_COMPILE_FLAGS "-fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
 
 include(FetchContent)
 FetchContent_Declare(
@@ -31,7 +32,7 @@ file(GLOB TEST_SRCS *_test.cc)
 include_directories(headers ${HEADERS})
 
 add_executable(tableau_benchmark tableau_benchmark.cc)
-target_link_libraries(tableau_benchmark benchmark::benchmark)
+target_link_libraries(tableau_benchmark benchmark::benchmark tcmalloc)
 
 enable_testing()
 
