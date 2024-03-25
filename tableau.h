@@ -45,10 +45,10 @@ class List {
 
   List(tableau_size_t size = 0) {
     capacity_ = 1;
-    size_ = 0;
     while (capacity_ < size) {
-      capacity_ *= 2;
+      capacity_ <<= 1;
     }
+    size_ = 0;
     index_ = new tableau_index_t[capacity_];
     data_ = new T[capacity_];
   }
