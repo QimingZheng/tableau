@@ -11,6 +11,9 @@ typedef int64_t tableau_index_t;
 typedef int64_t tableau_size_t;
 
 template <typename T>
+class SparseTableau;
+
+template <typename T>
 class Tableau;
 
 /**
@@ -219,6 +222,8 @@ class List {
   Tableau<T>* Cross(const List<T>* other, tableau_size_t rows,
                     tableau_size_t cols) const;
 
+  SparseTableau<T>* SparseCross(const List<T>* other) const;
+
   tableau_size_t Size() const { return size_; }
 
   void Append(tableau_index_t index, T value) {
@@ -249,6 +254,9 @@ class List {
   }
 
   friend class Iterator;
+
+  template <typename U>
+  friend class SparseTableau;
 
  private:
   tableau_size_t size_ = 0;
@@ -315,10 +323,21 @@ class Tableau {
       Col(col)->Add(other->Col(col));
   }
 
+  void Add(const SparseTableau<T>* other) {
+#pragma omp parallel for
+    for (tableau_index_t row = 0; row < other->Rows(); row++)
+      Row(other->SparseRowIndexOf(row))->Add(other->Row(row));
+
+#pragma omp parallel for
+    for (tableau_index_t col = 0; col < other->Cols(); col++)
+      Col(other->SparseColIndexOf(col))->Add(other->Col(col));
+  }
+
   template <typename U>
   friend class List;
 
   void AppendRow(tableau_index_t row, List<T>* list) {
+    // TODO: delete row_heads_[row]
     row_heads_[row] = list;
     for (auto iter = list->Begin(); iter->IsEnd() == false;
          iter = iter->Next()) {
@@ -326,6 +345,7 @@ class Tableau {
     }
   }
   void AppendCol(tableau_index_t col, List<T>* list) {
+    // TODO: delete col_heads_[col]
     col_heads_[col] = list;
     for (auto iter = list->Begin(); iter->IsEnd() == false;
          iter = iter->Next()) {
@@ -392,4 +412,75 @@ Tableau<T>* List<T>::Cross(const List<T>* other, tableau_size_t rows,
     tableau->SetCol(index, col);
   }
   return tableau;
+}
+
+template <typename T>
+class SparseTableau {
+ public:
+  SparseTableau(tableau_size_t rows, tableau_size_t cols) {
+    sparse_row_heads_ = new List<List<T>*>(rows);
+    sparse_row_heads_->size_ = rows;
+    sparse_col_heads_ = new List<List<T>*>(cols);
+    sparse_col_heads_->size_ = cols;
+  }
+  ~SparseTableau() {
+    delete sparse_col_heads_;
+    delete sparse_col_heads_;
+  }
+
+  List<T>* Row(tableau_index_t row) const {
+    return sparse_row_heads_->data_[row];
+  }
+  List<T>* Col(tableau_index_t col) const {
+    return sparse_col_heads_->data_[col];
+  }
+  tableau_index_t SparseRowIndexOf(tableau_index_t row) const {
+    return sparse_row_heads_->index_[row];
+  }
+  tableau_index_t SparseColIndexOf(tableau_index_t col) const {
+    return sparse_col_heads_->index_[col];
+  }
+
+  tableau_size_t Rows() const { return sparse_row_heads_->Size(); }
+  tableau_size_t Cols() const { return sparse_col_heads_->Size(); }
+
+  template <typename U>
+  friend class List;
+
+ private:
+  void SetRow(tableau_index_t row, tableau_index_t sparse_row_index,
+              List<T>* list) {
+    sparse_row_heads_->index_[row] = sparse_row_index;
+    sparse_row_heads_->data_[row] = list;
+  }
+  void SetCol(tableau_index_t col, tableau_index_t sparse_col_index,
+              List<T>* list) {
+    sparse_col_heads_->index_[col] = sparse_col_index;
+    sparse_col_heads_->data_[col] = list;
+  }
+  List<List<T>*>* sparse_row_heads_;
+  List<List<T>*>* sparse_col_heads_;
+};
+
+template <typename T>
+SparseTableau<T>* List<T>::SparseCross(const List<T>* other) const {
+  SparseTableau<T>* sparse_tableau =
+      new SparseTableau<T>(Size(), other->Size());
+#pragma omp parallel for
+  for (tableau_index_t i = 0; i < Size(); i++) {
+    List<T>* row = new List<T>(other);
+    tableau_index_t index = index_[i];
+    T scale = data_[i];
+    row->Scale(scale);
+    sparse_tableau->SetRow(i, index, row);
+  }
+#pragma omp parallel for
+  for (tableau_index_t i = 0; i < other->Size(); i++) {
+    List<T>* col = new List<T>(this);
+    tableau_index_t index = other->index_[i];
+    T scale = other->data_[i];
+    col->Scale(scale);
+    sparse_tableau->SetCol(i, index, col);
+  }
+  return sparse_tableau;
 }

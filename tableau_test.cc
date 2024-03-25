@@ -151,6 +151,21 @@ TEST(List, Cross) {
   }
 }
 
+TEST(List, SparseCross) {
+  List<T> list1, list2;
+  for (auto i = 0; i < 16; i += 1) {
+    list1.Append(i, i);
+    list2.Append(i, 1);
+  }
+  SparseTableau<T> *sparse_tableau = list1.SparseCross(&list2);
+  for (auto i = 0; i < 16; i++) {
+    for (auto j = 0; j < 16; j++) {
+      EXPECT_EQ(sparse_tableau->Row(i)->At(j), i);
+      EXPECT_EQ(sparse_tableau->Col(j)->At(i), i);
+    }
+  }
+}
+
 TEST(Tableau, Add) {
   List<T> list1, list2;
   for (auto i = 0; i < 16; i += 1) {
@@ -159,6 +174,22 @@ TEST(Tableau, Add) {
   }
   Tableau<T> *tableau1 = list1.Cross(&list2, 16, 16);
   Tableau<T> *tableau2 = list1.Cross(&list1, 16, 16);
+  tableau1->Add(tableau2);
+  for (auto i = 0; i < 16; i++) {
+    for (auto j = 0; j < 16; j++) {
+      EXPECT_EQ(tableau1->At(i, j), j + 1);
+    }
+  }
+}
+
+TEST(Tableau, AddSparseTableau) {
+  List<T> list1, list2;
+  for (auto i = 0; i < 16; i += 1) {
+    list1.Append(i, 1);
+    list2.Append(i, i);
+  }
+  Tableau<T> *tableau1 = list1.Cross(&list2, 16, 16);
+  SparseTableau<T> *tableau2 = list1.SparseCross(&list1);
   tableau1->Add(tableau2);
   for (auto i = 0; i < 16; i++) {
     for (auto j = 0; j < 16; j++) {
