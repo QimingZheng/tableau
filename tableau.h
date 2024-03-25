@@ -424,7 +424,17 @@ class SparseTableau {
     sparse_col_heads_->size_ = cols;
   }
   ~SparseTableau() {
-    delete sparse_col_heads_;
+    if (sparse_row_heads_ != nullptr) {
+      for (auto i = 0; i < sparse_row_heads_->Size(); i++) {
+        delete sparse_row_heads_->data_[i];
+      }
+    }
+    if (sparse_col_heads_ != nullptr) {
+      for (auto i = 0; i < sparse_col_heads_->Size(); i++) {
+        delete sparse_col_heads_->data_[i];
+      }
+    }
+    delete sparse_row_heads_;
     delete sparse_col_heads_;
   }
 
@@ -458,8 +468,8 @@ class SparseTableau {
     sparse_col_heads_->index_[col] = sparse_col_index;
     sparse_col_heads_->data_[col] = list;
   }
-  List<List<T>*>* sparse_row_heads_;
-  List<List<T>*>* sparse_col_heads_;
+  List<List<T>*>* sparse_row_heads_ = nullptr;
+  List<List<T>*>* sparse_col_heads_ = nullptr;
 };
 
 template <typename T>
