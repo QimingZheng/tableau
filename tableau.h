@@ -206,6 +206,10 @@ class List {
   }
 
   typedef std::pair<tableau_index_t, T> ReduceStruct;
+  static ReduceStruct MaxAbsReduce(const ReduceStruct& a,
+                                   const ReduceStruct& b) {
+    return (std::abs(a.second) < std::abs(b.second)) ? b : a;
+  }
   static ReduceStruct MinReduce(const ReduceStruct& a, const ReduceStruct& b) {
     return (b.second < a.second) ? b : a;
   }
