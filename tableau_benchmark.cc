@@ -4,6 +4,11 @@
 
 typedef float T;
 
+template <>
+inline bool _IsZeroT(const T &x) {
+  return x == 0;
+}
+
 static void CustomArguments(benchmark::internal::Benchmark* b) {
   for (tableau_size_t sparse_element_size = 1; sparse_element_size <= 1000;
        sparse_element_size = sparse_element_size * 10)

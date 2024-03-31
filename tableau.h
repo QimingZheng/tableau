@@ -16,6 +16,9 @@ class SparseTableau;
 template <typename T>
 class Tableau;
 
+template <typename T>
+inline bool _IsZeroT(const T& value);
+
 /**
  * A list is the abstraction of a row or column in a simplex tableau.
  */
@@ -96,23 +99,22 @@ class List {
     while (left_index < Size() && right_index < other->Size()) {
       if (index_[left_index] == other->index_[right_index]) {
         T sum = data_[left_index] + other->data_[right_index];
-        if (sum != 0) {
-          merged_data[next_index] =
-              data_[left_index] + other->data_[right_index];
+        if (!_IsZeroT(sum)) {
+          merged_data[next_index] = sum;
           merged_index[next_index] = index_[left_index];
           next_index++;
         }
         left_index++;
         right_index++;
       } else if (index_[left_index] < other->index_[right_index]) {
-        if (data_[left_index] != 0) {
+        if (!_IsZeroT(data_[left_index])) {
           merged_data[next_index] = data_[left_index];
           merged_index[next_index] = index_[left_index];
           next_index++;
         }
         left_index++;
       } else {
-        if (other->data_[right_index] != 0) {
+        if (!_IsZeroT(other->data_[right_index])) {
           merged_data[next_index] = other->data_[right_index];
           merged_index[next_index] = other->index_[right_index];
           next_index++;
@@ -121,7 +123,7 @@ class List {
       }
     }
     while (left_index < Size()) {
-      if (data_[left_index] != 0) {
+      if (!_IsZeroT(data_[left_index])) {
         merged_data[next_index] = data_[left_index];
         merged_index[next_index] = index_[left_index];
         next_index++;
@@ -129,7 +131,7 @@ class List {
       left_index++;
     }
     while (right_index < other->Size()) {
-      if (other->data_[right_index] != 0) {
+      if (!_IsZeroT(other->data_[right_index])) {
         merged_data[next_index] = other->data_[right_index];
         merged_index[next_index] = other->index_[right_index];
         next_index++;
@@ -152,9 +154,8 @@ class List {
     while (left_index < Size() && right_index < other->Size()) {
       if (index_[left_index] == other->index_[right_index]) {
         T prod = data_[left_index] * other->data_[right_index];
-        if (prod != 0) {
-          merged_data[next_index] =
-              data_[left_index] * other->data_[right_index];
+        if (!_IsZeroT(prod)) {
+          merged_data[next_index] = prod;
           merged_index[next_index] = index_[left_index];
           next_index++;
         }

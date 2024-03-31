@@ -5,6 +5,11 @@
 
 typedef float T;
 
+template <>
+inline bool _IsZeroT(const T &x) {
+  return std::abs(x) < 1e-6;
+}
+
 TEST(List, Append) {
   List<T> list;
   for (auto i = 0; i < 1024; i += 1) {
