@@ -22,6 +22,11 @@ enum TableauStorageFormat {
   ROW_AND_COLUMN,
 };
 
+enum ListStorageFormat {
+  DENSE,
+  SPARSE,
+};
+
 template <typename T>
 class SparseTableau;
 
@@ -58,19 +63,32 @@ class List {
 
   Iterator* Begin() { return new Iterator(this); }
 
-  List(tableau_size_t size = 0) {
-    capacity_ = 1;
-    while (capacity_ < size) {
-      capacity_ <<= 1;
+  List(tableau_size_t size = 0, ListStorageFormat format = SPARSE)
+      : storage_format_(format) {
+    if (format == SPARSE) {
+      capacity_ = 1;
+      while (capacity_ < size) {
+        capacity_ <<= 1;
+      }
+      size_ = 0;
+      index_ = new tableau_index_t[capacity_];
+      data_ = new T[capacity_];
+    } else {
+      size_ = size;
+      capacity_ = size;
+      if (size > 0) data_ = new T[capacity_];
     }
-    size_ = 0;
-    index_ = new tableau_index_t[capacity_];
-    data_ = new T[capacity_];
   }
   ~List() {
-    if (capacity_ > 0) {
-      delete data_;
-      delete index_;
+    if (storage_format_ == SPARSE) {
+      if (capacity_ > 0) {
+        delete data_;
+        delete index_;
+      }
+    } else {
+      if (capacity_ > 0) {
+        delete data_;
+      }
     }
     data_ = nullptr;
     index_ = nullptr;
@@ -79,29 +97,266 @@ class List {
   }
 
   List(const List<T>* other) {
-    size_ = other->size_;
-    capacity_ = other->capacity_;
-    index_ = new tableau_index_t[capacity_];
-    data_ = new T[capacity_];
-    std::memcpy(index_, other->index_, sizeof(tableau_index_t) * capacity_);
-    std::memcpy(data_, other->data_, sizeof(T) * capacity_);
+    storage_format_ = other->storage_format_;
+    if (storage_format_ == SPARSE) {
+      size_ = other->size_;
+      capacity_ = other->capacity_;
+      index_ = new tableau_index_t[capacity_];
+      data_ = new T[capacity_];
+      std::memcpy(index_, other->index_, sizeof(tableau_index_t) * capacity_);
+      std::memcpy(data_, other->data_, sizeof(T) * capacity_);
+    } else {
+      size_ = other->size_;
+      capacity_ = other->capacity_;
+      data_ = new T[capacity_];
+      std::memcpy(data_, other->data_, sizeof(T) * capacity_);
+    }
   }
+
+  ListStorageFormat StorageFormat() const { return storage_format_; }
 
   void Clear() { size_ = 0; }
 
   T At(tableau_index_t index) {
-    tableau_index_t pos = BinarySearch(index);
-    if (pos >= 0) return data_[pos];
-    return 0;
+    if (storage_format_ == SPARSE) {
+      tableau_index_t pos = BinarySearch(index);
+      if (pos >= 0) return data_[pos];
+      return 0;
+    } else {
+      return data_[index];
+    }
   }
 
   /* Set the element at index, if no element is at index, skip. */
   void Set(tableau_index_t index, T value) {
-    tableau_index_t pos = BinarySearch(index);
-    if (pos >= 0) data_[pos] = value;
+    if (storage_format_ == SPARSE) {
+      tableau_index_t pos = BinarySearch(index);
+      if (pos >= 0) data_[pos] = value;
+    } else {
+      data_[index] = value;
+    }
   }
 
   void Add(const List<T>* other) {
+    if (StorageFormat() == SPARSE and other->StorageFormat() == SPARSE) {
+      SparseAdd(other);
+    } else if (StorageFormat() == DENSE and other->StorageFormat() == DENSE) {
+      assert_msg(Size() == other->Size(),
+                 "Cannot add two lists with different size");
+      for (auto i = 0; i < Size(); i++) {
+        data_[i] += other->data_[i];
+      }
+    } else {
+      // case 1: StorageFormat() == SPARSE and other->StorageFormat() == DENSE
+      // case 2: StorageFormat() == DENSE and other->StorageFormat() == SPARSE
+      tableau_index_t* sparse_index =
+          StorageFormat() == SPARSE ? index_ : other->index_;
+      tableau_size_t dense_size =
+          StorageFormat() == DENSE ? Size() : other->Size();
+      tableau_index_t sparse_size =
+          StorageFormat() == SPARSE ? Size() : other->Size();
+      if (sparse_size > 0) assert(sparse_index[sparse_size - 1] < dense_size);
+      T* dense_data = StorageFormat() == DENSE ? data_ : other->data_;
+      T* sparse_data = StorageFormat() == SPARSE ? data_ : other->data_;
+      if (StorageFormat() == DENSE) {
+        for (auto i = 0; i < sparse_size; i++) {
+          dense_data[sparse_index[i]] += sparse_data[i];
+        }
+      } else {
+        T* new_data = new T[dense_size];
+        std::memcpy(new_data, dense_data, sizeof(T) * dense_size);
+        for (auto i = 0; i < sparse_size; i++) {
+          new_data[sparse_index[i]] += sparse_data[i];
+        }
+        delete data_;
+        delete index_;
+        data_ = new_data;
+        index_ = nullptr;
+        size_ = dense_size;
+        capacity_ = dense_size;
+        storage_format_ = DENSE;
+      }
+    }
+  }
+
+  void Mul(const List<T>* other) {
+    if (StorageFormat() == SPARSE and other->StorageFormat() == SPARSE) {
+      SparseMul(other);
+    } else if (StorageFormat() == DENSE and other->StorageFormat() == DENSE) {
+      assert_msg(Size() == other->Size(),
+                 "Cannot add two lists with different size");
+      for (auto i = 0; i < Size(); i++) {
+        data_[i] *= other->data_[i];
+      }
+    } else {
+      // case 1: StorageFormat() == SPARSE and other->StorageFormat() == DENSE
+      // case 2: StorageFormat() == DENSE and other->StorageFormat() == SPARSE
+      tableau_index_t* sparse_index =
+          StorageFormat() == SPARSE ? index_ : other->index_;
+      tableau_size_t dense_size =
+          StorageFormat() == DENSE ? Size() : other->Size();
+      tableau_index_t sparse_size =
+          StorageFormat() == SPARSE ? Size() : other->Size();
+      if (sparse_size > 0) assert(sparse_index[sparse_size - 1] < dense_size);
+      T* dense_data = StorageFormat() == DENSE ? data_ : other->data_;
+      T* sparse_data = StorageFormat() == SPARSE ? data_ : other->data_;
+      if (StorageFormat() == SPARSE) {
+        for (auto i = 0; i < sparse_size; i++) {
+          sparse_data[i] *= dense_data[sparse_index[i]];
+        }
+      } else {
+        T* new_data = new T[sparse_size];
+        tableau_index_t* new_index = new tableau_index_t[sparse_size];
+        std::memcpy(new_data, sparse_data, sizeof(T) * sparse_size);
+        std::memcpy(new_index, sparse_index,
+                    sizeof(tableau_index_t) * sparse_size);
+        for (auto i = 0; i < sparse_size; i++) {
+          new_data[i] += dense_data[sparse_index[i]];
+        }
+        delete data_;
+        data_ = new_data;
+        index_ = new_index;
+        size_ = sparse_size;
+        capacity_ = sparse_size;
+        storage_format_ = SPARSE;
+      }
+    }
+  }
+
+  void Scale(const T scale) {
+    for (tableau_index_t i = 0; i < size_; i++) data_[i] *= scale;
+  }
+
+  template <typename R>
+  List<R>* Map(R (*transform)(const T&)) const {
+    List<R>* list = new List<R>(Size(), StorageFormat());
+    if (StorageFormat() == SPARSE) {
+#pragma omp parallel for
+      for (tableau_index_t i = 0; i < Size(); i++) {
+        list->index_[i] = index_[i];
+        list->data_[i] = transform(data_[i]);
+      }
+      list->size_ = Size();
+    } else {
+#pragma omp parallel for
+      for (tableau_index_t i = 0; i < Size(); i++) {
+        list->data_[i] = transform(data_[i]);
+      }
+      list->size_ = Size();
+    }
+    return list;
+  }
+
+  typedef std::pair<tableau_index_t, T> ReduceStruct;
+  static ReduceStruct MaxAbsReduce(const ReduceStruct& a,
+                                   const ReduceStruct& b) {
+    return (std::abs(a.second) < std::abs(b.second)) ? b : a;
+  }
+  static ReduceStruct MinReduce(const ReduceStruct& a, const ReduceStruct& b) {
+    return (b.second < a.second) ? b : a;
+  }
+
+  ReduceStruct Reduce(ReduceStruct (*reduce)(const ReduceStruct&,
+                                             const ReduceStruct&),
+                      ReduceStruct initial_value) const {
+    if (StorageFormat() == SPARSE) {
+      for (tableau_index_t i = 0; i < Size(); i++) {
+        initial_value = reduce({index_[i], data_[i]}, initial_value);
+      }
+      return initial_value;
+    } else {
+      for (tableau_index_t i = 0; i < Size(); i++) {
+        initial_value = reduce({i, data_[i]}, initial_value);
+      }
+      return initial_value;
+    }
+  }
+
+  Tableau<T>* Cross(const List<T>* other, tableau_size_t rows,
+                    tableau_size_t cols,
+                    TableauStorageFormat format = ROW_AND_COLUMN) const;
+
+  SparseTableau<T>* SparseCross(
+      const List<T>* other, TableauStorageFormat format = ROW_AND_COLUMN) const;
+
+  tableau_size_t Size() const { return size_; }
+
+  void Append(tableau_index_t index, T value) {
+    if (StorageFormat() == SPARSE) {
+      if (size_ >= capacity_) {
+        capacity_ *= 2;
+        T* new_data = new T[capacity_];
+        tableau_index_t* new_index = new tableau_index_t[capacity_];
+
+        std::memcpy(new_index, index_, sizeof(tableau_index_t) * size_);
+        std::memcpy(new_data, data_, sizeof(T) * size_);
+
+        delete index_;
+        delete data_;
+        index_ = new_index;
+        data_ = new_data;
+      }
+      index_[size_] = index;
+      data_[size_] = value;
+      size_ += 1;
+    } else {
+      data_[index] = value;
+    }
+  }
+
+  T Dot(const List<T>* other) const {
+    if (StorageFormat() == SPARSE and other->StorageFormat() == SPARSE) {
+      return SparseDot(other);
+    } else if (StorageFormat() == DENSE and other->StorageFormat() == DENSE) {
+      assert_msg(Size() == other->Size(),
+                 "Cannot Dot two Dense Lists with different size");
+      T product = 0;
+      for (tableau_index_t i = 0; i < size_; i++) {
+        product += data_[i] * other->data_[i];
+      }
+      return product;
+    } else {
+      // case 1: StorageFormat() == SPARSE and other->StorageFormat() == DENSE
+      // case 2: StorageFormat() == DENSE and other->StorageFormat() == SPARSE
+      tableau_index_t* sparse_index =
+          StorageFormat() == SPARSE ? index_ : other->index_;
+      tableau_size_t dense_size =
+          StorageFormat() == DENSE ? Size() : other->Size();
+      tableau_index_t sparse_size =
+          StorageFormat() == SPARSE ? Size() : other->Size();
+      if (sparse_size > 0) assert(sparse_index[sparse_size - 1] < dense_size);
+      T* dense_data = StorageFormat() == DENSE ? data_ : other->data_;
+      T* sparse_data = StorageFormat() == SPARSE ? data_ : other->data_;
+      T product = 0;
+      for (tableau_index_t i = 0; i < sparse_size; i++) {
+        product += sparse_data[i] * dense_data[sparse_index[i]];
+      }
+      return product;
+    }
+  }
+  void Pop(tableau_index_t last_index = -1) {
+    assert_msg(StorageFormat() == SPARSE, "Dense List does not support Pop");
+    if (size_ > 0) {
+      if (last_index > 0) {
+        if (index_[size_ - 1] != last_index) return;
+      }
+      size_ -= 1;
+    }
+  }
+
+  friend class Iterator;
+
+  template <typename U>
+  friend class SparseTableau;
+
+ private:
+  tableau_size_t size_ = 0;
+  tableau_size_t capacity_ = 0;
+  tableau_index_t* index_ = nullptr;
+  T* data_ = nullptr;
+  ListStorageFormat storage_format_ = SPARSE;
+
+  void SparseAdd(const List<T>* other) {
     if (other->Size() == 0) return;
     capacity_ = Size() + other->Size();
     tableau_index_t* merged_index = new tableau_index_t[capacity_];
@@ -156,8 +411,7 @@ class List {
     index_ = merged_index;
     data_ = merged_data;
   }
-
-  void Mul(const List<T>* other) {
+  void SparseMul(const List<T>* other) {
     capacity_ = std::min(Size(), other->Size());
     tableau_index_t* merged_index = new tableau_index_t[capacity_];
     T* merged_data = new T[capacity_];
@@ -186,11 +440,7 @@ class List {
     data_ = merged_data;
   }
 
-  void Scale(const T scale) {
-    for (tableau_index_t i = 0; i < size_; i++) data_[i] *= scale;
-  }
-
-  T Dot(const List<T>* other) const {
+  T SparseDot(const List<T>* other) const {
     tableau_index_t left = 0, right = 0;
     T product = 0;
     while (left < Size() and right < other->Size()) {
@@ -205,83 +455,6 @@ class List {
     }
     return product;
   }
-
-  template <typename R>
-  List<R>* Map(R (*transform)(const T&)) const {
-    List<R>* list = new List<R>(Size());
-#pragma omp parallel for
-    for (tableau_index_t i = 0; i < Size(); i++) {
-      list->index_[i] = index_[i];
-      list->data_[i] = transform(data_[i]);
-    }
-    list->size_ = Size();
-    return list;
-  }
-
-  typedef std::pair<tableau_index_t, T> ReduceStruct;
-  static ReduceStruct MaxAbsReduce(const ReduceStruct& a,
-                                   const ReduceStruct& b) {
-    return (std::abs(a.second) < std::abs(b.second)) ? b : a;
-  }
-  static ReduceStruct MinReduce(const ReduceStruct& a, const ReduceStruct& b) {
-    return (b.second < a.second) ? b : a;
-  }
-
-  ReduceStruct Reduce(ReduceStruct (*reduce)(const ReduceStruct&,
-                                             const ReduceStruct&),
-                      ReduceStruct initial_value) const {
-    for (tableau_index_t i = 0; i < Size(); i++) {
-      initial_value = reduce({index_[i], data_[i]}, initial_value);
-    }
-    return initial_value;
-  }
-
-  Tableau<T>* Cross(const List<T>* other, tableau_size_t rows,
-                    tableau_size_t cols,
-                    TableauStorageFormat format = ROW_AND_COLUMN) const;
-
-  SparseTableau<T>* SparseCross(
-      const List<T>* other, TableauStorageFormat format = ROW_AND_COLUMN) const;
-
-  tableau_size_t Size() const { return size_; }
-
-  void Append(tableau_index_t index, T value) {
-    if (size_ >= capacity_) {
-      capacity_ *= 2;
-      T* new_data = new T[capacity_];
-      tableau_index_t* new_index = new tableau_index_t[capacity_];
-
-      std::memcpy(new_index, index_, sizeof(tableau_index_t) * size_);
-      std::memcpy(new_data, data_, sizeof(T) * size_);
-
-      delete index_;
-      delete data_;
-      index_ = new_index;
-      data_ = new_data;
-    }
-    index_[size_] = index;
-    data_[size_] = value;
-    size_ += 1;
-  }
-  void Pop(tableau_index_t last_index = -1) {
-    if (size_ > 0) {
-      if (last_index > 0) {
-        if (index_[size_ - 1] != last_index) return;
-      }
-      size_ -= 1;
-    }
-  }
-
-  friend class Iterator;
-
-  template <typename U>
-  friend class SparseTableau;
-
- private:
-  tableau_size_t size_ = 0;
-  tableau_size_t capacity_ = 0;
-  tableau_index_t* index_ = nullptr;
-  T* data_ = nullptr;
 
   tableau_index_t BinarySearch(tableau_index_t index) {
     tableau_index_t lower = 0, upper = size_ - 1;
