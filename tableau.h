@@ -6,9 +6,21 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <iostream>
+#include <string>
+
+#define assert_msg(cond, fmt, ...) \
+  assert(cond || !fprintf(stderr, fmt, ##__VA_ARGS__))
 
 typedef int64_t tableau_index_t;
 typedef int64_t tableau_size_t;
+
+enum TableauStorageFormat {
+  ROW_ONLY,
+  COLUMN_ONLY,
+  ROW_AND_COLUMN,
+};
 
 template <typename T>
 class SparseTableau;
@@ -225,9 +237,11 @@ class List {
   }
 
   Tableau<T>* Cross(const List<T>* other, tableau_size_t rows,
-                    tableau_size_t cols) const;
+                    tableau_size_t cols,
+                    TableauStorageFormat format = ROW_AND_COLUMN) const;
 
-  SparseTableau<T>* SparseCross(const List<T>* other) const;
+  SparseTableau<T>* SparseCross(
+      const List<T>* other, TableauStorageFormat format = ROW_AND_COLUMN) const;
 
   tableau_size_t Size() const { return size_; }
 
@@ -290,52 +304,88 @@ class List {
 template <typename T>
 class Tableau {
  public:
-  Tableau(tableau_size_t rows, tableau_size_t columns)
-      : rows_(rows), columns_(columns) {
-    row_heads_ = new List<T>*[rows];
+  Tableau(tableau_size_t rows, tableau_size_t columns,
+          TableauStorageFormat format = ROW_AND_COLUMN)
+      : rows_(rows), columns_(columns), storage_format_(format) {
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      row_heads_ = new List<T>*[rows];
 #pragma omp parallel for
-    for (tableau_size_t i = 0; i < rows; i++) row_heads_[i] = new List<T>();
-    col_heads_ = new List<T>*[columns];
+      for (tableau_size_t i = 0; i < rows; i++) row_heads_[i] = new List<T>();
+    }
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      col_heads_ = new List<T>*[columns];
 #pragma omp parallel for
-    for (tableau_size_t i = 0; i < columns; i++) col_heads_[i] = new List<T>();
+      for (tableau_size_t i = 0; i < columns; i++)
+        col_heads_[i] = new List<T>();
+    }
   }
   ~Tableau() {
-    for (auto i = 0; i < rows_; i++) {
-      delete row_heads_[i];
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      for (auto i = 0; i < rows_; i++) {
+        delete row_heads_[i];
+      }
+      delete row_heads_;
     }
-    for (auto i = 0; i < columns_; i++) {
-      delete col_heads_[i];
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      for (auto i = 0; i < columns_; i++) {
+        delete col_heads_[i];
+      }
+      delete col_heads_;
     }
-    delete row_heads_;
-    delete col_heads_;
   }
 
-  T At(tableau_index_t row, tableau_index_t col) { return Row(row)->At(col); }
+  T At(tableau_index_t row, tableau_index_t col) {
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN)
+      return Row(row)->At(col);
+    else
+      return Col(col)->At(row);
+  }
 
-  List<T>* Row(tableau_index_t row) const { return row_heads_[row]; }
-  List<T>* Col(tableau_index_t col) const { return col_heads_[col]; }
+  List<T>* Row(tableau_index_t row) const {
+    if (storage_format_ == COLUMN_ONLY) {
+      throw std::runtime_error(
+          "Cannot get row of tableau in column only storage format");
+    }
+    return row_heads_[row];
+  }
+  List<T>* Col(tableau_index_t col) const {
+    if (storage_format_ == ROW_ONLY) {
+      throw std::runtime_error(
+          "Cannot get column of tableau in row only storage format");
+    }
+    return col_heads_[col];
+  }
 
   void Add(const Tableau<T>* other) {
     assert(rows_ == other->rows_);
     assert(columns_ == other->columns_);
+    assert(storage_format_ == other->storage_format_);
 
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
 #pragma omp parallel for
-    for (tableau_index_t row = 0; row < rows_; row++)
-      Row(row)->Add(other->Row(row));
-
+      for (tableau_index_t row = 0; row < rows_; row++)
+        Row(row)->Add(other->Row(row));
+    }
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
 #pragma omp parallel for
-    for (tableau_index_t col = 0; col < columns_; col++)
-      Col(col)->Add(other->Col(col));
+      for (tableau_index_t col = 0; col < columns_; col++)
+        Col(col)->Add(other->Col(col));
+    }
   }
 
   void Add(const SparseTableau<T>* other) {
-#pragma omp parallel for
-    for (tableau_index_t row = 0; row < other->Rows(); row++)
-      Row(other->SparseRowIndexOf(row))->Add(other->Row(row));
+    assert(storage_format_ == other->StorageFormat());
 
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
 #pragma omp parallel for
-    for (tableau_index_t col = 0; col < other->Cols(); col++)
-      Col(other->SparseColIndexOf(col))->Add(other->Col(col));
+      for (tableau_index_t row = 0; row < other->Rows(); row++)
+        Row(other->SparseRowIndexOf(row))->Add(other->Row(row));
+    }
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+#pragma omp parallel for
+      for (tableau_index_t col = 0; col < other->Cols(); col++)
+        Col(other->SparseColIndexOf(col))->Add(other->Col(col));
+    }
   }
 
   template <typename U>
@@ -343,78 +393,107 @@ class Tableau {
 
   void AppendRow(tableau_index_t row, List<T>* list) {
     // TODO: delete row_heads_[row]
-    row_heads_[row] = list;
-    for (auto iter = list->Begin(); iter->IsEnd() == false;
-         iter = iter->Next()) {
-      Col(iter->Index())->Append(row, iter->Data());
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      row_heads_[row] = list;
+    }
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      for (auto iter = list->Begin(); iter->IsEnd() == false;
+           iter = iter->Next()) {
+        Col(iter->Index())->Append(row, iter->Data());
+      }
     }
   }
   void AppendCol(tableau_index_t col, List<T>* list) {
     // TODO: delete col_heads_[col]
-    col_heads_[col] = list;
-    for (auto iter = list->Begin(); iter->IsEnd() == false;
-         iter = iter->Next()) {
-      Row(iter->Index())->Append(col, iter->Data());
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      col_heads_[col] = list;
+    }
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      for (auto iter = list->Begin(); iter->IsEnd() == false;
+           iter = iter->Next()) {
+        Row(iter->Index())->Append(col, iter->Data());
+      }
     }
   }
 
   void AppendExtraCol(List<T>* list) {
-    List<T>** new_col_heads = new List<T>*[columns_ + 1];
-    for (auto i = 0; i < columns_; i++) new_col_heads[i] = col_heads_[i];
-    new_col_heads[columns_] = list;
-    delete col_heads_;
-    col_heads_ = new_col_heads;
     columns_ += 1;
-    for (auto iter = list->Begin(); iter->IsEnd() == false;
-         iter = iter->Next()) {
-      Row(iter->Index())->Append(columns_ - 1, iter->Data());
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      List<T>** new_col_heads = new List<T>*[columns_];
+      for (auto i = 0; i < columns_ - 1; i++) new_col_heads[i] = col_heads_[i];
+      new_col_heads[columns_ - 1] = list;
+      delete col_heads_;
+      col_heads_ = new_col_heads;
+    }
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      for (auto iter = list->Begin(); iter->IsEnd() == false;
+           iter = iter->Next()) {
+        Row(iter->Index())->Append(columns_ - 1, iter->Data());
+      }
     }
   }
   void RemoveExtraCol() {
-    auto last_col = col_heads_[columns_ - 1];
     columns_ -= 1;
-    for (auto iter = last_col->Begin(); iter->IsEnd() == false;
-         iter = iter->Next()) {
-      Row(iter->Index())->Pop(columns_);
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      auto last_col = col_heads_[columns_];
+      for (auto iter = last_col->Begin(); iter->IsEnd() == false;
+           iter = iter->Next()) {
+        Row(iter->Index())->Pop(columns_);
+      }
     }
   }
 
   tableau_size_t Rows() const { return rows_; }
   tableau_size_t Cols() const { return columns_; }
+  TableauStorageFormat StorageFormat() const { return storage_format_; }
 
  private:
   void SetRow(tableau_index_t row, List<T>* list) {
+    if (storage_format_ == COLUMN_ONLY) {
+      throw std::runtime_error(
+          "Cannot call SetRow for tableau in column only storage format");
+    }
     delete row_heads_[row];
     row_heads_[row] = list;
   }
   void SetCol(tableau_index_t col, List<T>* list) {
+    if (storage_format_ == ROW_ONLY) {
+      throw std::runtime_error(
+          "Cannot call SetCol for tableau in row only storage format");
+    }
     delete col_heads_[col];
     col_heads_[col] = list;
   }
   tableau_size_t rows_, columns_;
   List<T>** row_heads_;
   List<T>** col_heads_;
+  TableauStorageFormat storage_format_ = ROW_AND_COLUMN;
 };
 
 template <typename T>
 Tableau<T>* List<T>::Cross(const List<T>* other, tableau_size_t rows,
-                           tableau_size_t cols) const {
-  Tableau<T>* tableau = new Tableau<T>(rows, cols);
+                           tableau_size_t cols,
+                           TableauStorageFormat format) const {
+  Tableau<T>* tableau = new Tableau<T>(rows, cols, format);
+  if (format == ROW_ONLY or format == ROW_AND_COLUMN) {
 #pragma omp parallel for
-  for (tableau_index_t i = 0; i < Size(); i++) {
-    List<T>* row = new List<T>(other);
-    tableau_index_t index = index_[i];
-    T scale = data_[i];
-    row->Scale(scale);
-    tableau->SetRow(index, row);
+    for (tableau_index_t i = 0; i < Size(); i++) {
+      List<T>* row = new List<T>(other);
+      tableau_index_t index = index_[i];
+      T scale = data_[i];
+      row->Scale(scale);
+      tableau->SetRow(index, row);
+    }
   }
+  if (format == COLUMN_ONLY or format == ROW_AND_COLUMN) {
 #pragma omp parallel for
-  for (tableau_index_t i = 0; i < other->Size(); i++) {
-    List<T>* col = new List<T>(this);
-    tableau_index_t index = other->index_[i];
-    T scale = other->data_[i];
-    col->Scale(scale);
-    tableau->SetCol(index, col);
+    for (tableau_index_t i = 0; i < other->Size(); i++) {
+      List<T>* col = new List<T>(this);
+      tableau_index_t index = other->index_[i];
+      T scale = other->data_[i];
+      col->Scale(scale);
+      tableau->SetCol(index, col);
+    }
   }
   return tableau;
 }
@@ -422,42 +501,68 @@ Tableau<T>* List<T>::Cross(const List<T>* other, tableau_size_t rows,
 template <typename T>
 class SparseTableau {
  public:
-  SparseTableau(tableau_size_t rows, tableau_size_t cols) {
-    sparse_row_heads_ = new List<List<T>*>(rows);
-    sparse_row_heads_->size_ = rows;
-    sparse_col_heads_ = new List<List<T>*>(cols);
-    sparse_col_heads_->size_ = cols;
+  SparseTableau(tableau_size_t rows, tableau_size_t cols,
+                TableauStorageFormat format)
+      : storage_format_(format) {
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      if (rows > 0) {
+        sparse_row_heads_ = new List<List<T>*>(rows);
+        sparse_row_heads_->size_ = rows;
+      }
+    }
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      if (cols > 0) {
+        sparse_col_heads_ = new List<List<T>*>(cols);
+        sparse_col_heads_->size_ = cols;
+      }
+    }
   }
   ~SparseTableau() {
-    if (sparse_row_heads_ != nullptr) {
-      for (auto i = 0; i < sparse_row_heads_->Size(); i++) {
-        delete sparse_row_heads_->data_[i];
+    if (storage_format_ == ROW_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      if (sparse_row_heads_ != nullptr) {
+        for (auto i = 0; i < sparse_row_heads_->Size(); i++) {
+          delete sparse_row_heads_->data_[i];
+        }
+        delete sparse_row_heads_;
       }
     }
-    if (sparse_col_heads_ != nullptr) {
-      for (auto i = 0; i < sparse_col_heads_->Size(); i++) {
-        delete sparse_col_heads_->data_[i];
+    if (storage_format_ == COLUMN_ONLY or storage_format_ == ROW_AND_COLUMN) {
+      if (sparse_col_heads_ != nullptr) {
+        for (auto i = 0; i < sparse_col_heads_->Size(); i++) {
+          delete sparse_col_heads_->data_[i];
+        }
+        delete sparse_col_heads_;
       }
     }
-    delete sparse_row_heads_;
-    delete sparse_col_heads_;
   }
 
   List<T>* Row(tableau_index_t row) const {
+    CheckFormat(COLUMN_ONLY, "Row");
     return sparse_row_heads_->data_[row];
   }
   List<T>* Col(tableau_index_t col) const {
+    CheckFormat(ROW_ONLY, "Col");
     return sparse_col_heads_->data_[col];
   }
   tableau_index_t SparseRowIndexOf(tableau_index_t row) const {
+    CheckFormat(COLUMN_ONLY, "SparseRowIndexOf");
     return sparse_row_heads_->index_[row];
   }
   tableau_index_t SparseColIndexOf(tableau_index_t col) const {
+    CheckFormat(ROW_ONLY, "SparseColIndexOf");
     return sparse_col_heads_->index_[col];
   }
 
-  tableau_size_t Rows() const { return sparse_row_heads_->Size(); }
-  tableau_size_t Cols() const { return sparse_col_heads_->Size(); }
+  tableau_size_t Rows() const {
+    CheckFormat(COLUMN_ONLY, "Rows");
+    return sparse_row_heads_->Size();
+  }
+  tableau_size_t Cols() const {
+    CheckFormat(ROW_ONLY, "Cols");
+    return sparse_col_heads_->Size();
+  }
+
+  TableauStorageFormat StorageFormat() const { return storage_format_; }
 
   template <typename U>
   friend class List;
@@ -465,37 +570,52 @@ class SparseTableau {
  private:
   void SetRow(tableau_index_t row, tableau_index_t sparse_row_index,
               List<T>* list) {
+    CheckFormat(COLUMN_ONLY, "SetRow");
     sparse_row_heads_->index_[row] = sparse_row_index;
     sparse_row_heads_->data_[row] = list;
   }
   void SetCol(tableau_index_t col, tableau_index_t sparse_col_index,
               List<T>* list) {
+    CheckFormat(ROW_ONLY, "SetCol");
     sparse_col_heads_->index_[col] = sparse_col_index;
     sparse_col_heads_->data_[col] = list;
   }
+  inline void CheckFormat(TableauStorageFormat unexpected_format,
+                          const char* method_name) const {
+    assert_msg(storage_format_ != unexpected_format,
+               "Cannot call %s when the sparse tableau is in %d storage format",
+               method_name, storage_format_);
+  }
+
   List<List<T>*>* sparse_row_heads_ = nullptr;
   List<List<T>*>* sparse_col_heads_ = nullptr;
+  TableauStorageFormat storage_format_ = ROW_AND_COLUMN;
 };
 
 template <typename T>
-SparseTableau<T>* List<T>::SparseCross(const List<T>* other) const {
+SparseTableau<T>* List<T>::SparseCross(const List<T>* other,
+                                       TableauStorageFormat format) const {
   SparseTableau<T>* sparse_tableau =
-      new SparseTableau<T>(Size(), other->Size());
+      new SparseTableau<T>(Size(), other->Size(), format);
+  if (format == ROW_ONLY or format == ROW_AND_COLUMN) {
 #pragma omp parallel for
-  for (tableau_index_t i = 0; i < Size(); i++) {
-    List<T>* row = new List<T>(other);
-    tableau_index_t index = index_[i];
-    T scale = data_[i];
-    row->Scale(scale);
-    sparse_tableau->SetRow(i, index, row);
+    for (tableau_index_t i = 0; i < Size(); i++) {
+      List<T>* row = new List<T>(other);
+      tableau_index_t index = index_[i];
+      T scale = data_[i];
+      row->Scale(scale);
+      sparse_tableau->SetRow(i, index, row);
+    }
   }
+  if (format == COLUMN_ONLY or format == ROW_AND_COLUMN) {
 #pragma omp parallel for
-  for (tableau_index_t i = 0; i < other->Size(); i++) {
-    List<T>* col = new List<T>(this);
-    tableau_index_t index = other->index_[i];
-    T scale = other->data_[i];
-    col->Scale(scale);
-    sparse_tableau->SetCol(i, index, col);
+    for (tableau_index_t i = 0; i < other->Size(); i++) {
+      List<T>* col = new List<T>(this);
+      tableau_index_t index = other->index_[i];
+      T scale = other->data_[i];
+      col->Scale(scale);
+      sparse_tableau->SetCol(i, index, col);
+    }
   }
   return sparse_tableau;
 }
