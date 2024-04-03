@@ -137,15 +137,17 @@ class List {
     }
   }
 
-  void Add(const List<T>* other) {
+  void Add(const List<T>* other) { AddScaled(other, 1, false); }
+  void AddScaled(const List<T>* other, T scale, bool enable_scale) {
     if (StorageFormat() == SPARSE and other->StorageFormat() == SPARSE) {
-      SparseAdd(other);
+      SparseAdd(other, scale, enable_scale);
     } else if (StorageFormat() == DENSE and other->StorageFormat() == DENSE) {
       assert_msg(Size() == other->Size(),
                  "Cannot add two lists with different size");
-      for (auto i = 0; i < Size(); i++) {
-        data_[i] += other->data_[i];
-      }
+      if (enable_scale)
+        for (auto i = 0; i < Size(); i++) data_[i] += scale * other->data_[i];
+      else
+        for (auto i = 0; i < Size(); i++) data_[i] += other->data_[i];
     } else {
       // case 1: StorageFormat() == SPARSE and other->StorageFormat() == DENSE
       // case 2: StorageFormat() == DENSE and other->StorageFormat() == SPARSE
@@ -159,15 +161,23 @@ class List {
       T* dense_data = StorageFormat() == DENSE ? data_ : other->data_;
       T* sparse_data = StorageFormat() == SPARSE ? data_ : other->data_;
       if (StorageFormat() == DENSE) {
-        for (auto i = 0; i < sparse_size; i++) {
-          dense_data[sparse_index[i]] += sparse_data[i];
-        }
+        if (enable_scale)
+          for (auto i = 0; i < sparse_size; i++)
+            dense_data[sparse_index[i]] += scale * sparse_data[i];
+        else
+          for (auto i = 0; i < sparse_size; i++)
+            dense_data[sparse_index[i]] += sparse_data[i];
       } else {
         T* new_data = new T[dense_size];
         std::memcpy(new_data, dense_data, sizeof(T) * dense_size);
-        for (auto i = 0; i < sparse_size; i++) {
-          new_data[sparse_index[i]] += sparse_data[i];
-        }
+        if (enable_scale)
+          for (auto i = 0; i < dense_size; i++) new_data[i] *= scale;
+        if (enable_scale)
+          for (auto i = 0; i < sparse_size; i++)
+            new_data[sparse_index[i]] += sparse_data[i];
+        else
+          for (auto i = 0; i < sparse_size; i++)
+            new_data[sparse_index[i]] += sparse_data[i];
         delete data_;
         delete index_;
         data_ = new_data;
@@ -300,6 +310,7 @@ class List {
       data_[size_] = value;
       size_ += 1;
     } else {
+      assert(index < size_);
       data_[index] = value;
     }
   }
@@ -356,7 +367,7 @@ class List {
   T* data_ = nullptr;
   ListStorageFormat storage_format_ = SPARSE;
 
-  void SparseAdd(const List<T>* other) {
+  void SparseAdd(const List<T>* other, T scale, bool enable_scale) {
     if (other->Size() == 0) return;
     capacity_ = Size() + other->Size();
     tableau_index_t* merged_index = new tableau_index_t[capacity_];
@@ -365,7 +376,9 @@ class List {
 
     while (left_index < Size() && right_index < other->Size()) {
       if (index_[left_index] == other->index_[right_index]) {
-        T sum = data_[left_index] + other->data_[right_index];
+        T sum = data_[left_index] + (enable_scale
+                                         ? scale * other->data_[right_index]
+                                         : other->data_[right_index]);
         if (!_IsZeroT(sum)) {
           merged_data[next_index] = sum;
           merged_index[next_index] = index_[left_index];
@@ -381,8 +394,10 @@ class List {
         }
         left_index++;
       } else {
-        if (!_IsZeroT(other->data_[right_index])) {
-          merged_data[next_index] = other->data_[right_index];
+        if (!_IsZeroT(scale * other->data_[right_index])) {
+          merged_data[next_index] =
+              (enable_scale ? scale * other->data_[right_index]
+                            : other->data_[right_index]);
           merged_index[next_index] = other->index_[right_index];
           next_index++;
         }
@@ -398,8 +413,10 @@ class List {
       left_index++;
     }
     while (right_index < other->Size()) {
-      if (!_IsZeroT(other->data_[right_index])) {
-        merged_data[next_index] = other->data_[right_index];
+      if (!_IsZeroT(scale * other->data_[right_index])) {
+        merged_data[next_index] =
+            (enable_scale ? scale * other->data_[right_index]
+                          : other->data_[right_index]);
         merged_index[next_index] = other->index_[right_index];
         next_index++;
       }
@@ -614,6 +631,20 @@ class Tableau {
         Row(iter->Index())->Pop(columns_);
       }
     }
+  }
+  List<T>* SumScaledRows(List<T>* scale) {
+    assert_msg(scale->StorageFormat() == DENSE,
+               "Scale List must be in Dense format");
+    assert_msg(StorageFormat() == ROW_ONLY or StorageFormat() == ROW_AND_COLUMN,
+               "Only ROW_ONLY or ROW_AND_COLUMN format tableau can call "
+               "SumScaledRows");
+    assert_msg(Rows() == scale->Size(),
+               "Tableau Rows must equals to scale List size");
+    List<T>* ret = new List<T>(columns_, DENSE);
+    for (tableau_index_t row = 0; row < rows_; row++) {
+      ret->AddScaled(Row(row), scale->At(row), true);
+    }
+    return ret;
   }
 
   tableau_size_t Rows() const { return rows_; }

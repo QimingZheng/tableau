@@ -172,13 +172,25 @@ TEST(List, SparseCross) {
 }
 
 TEST(Tableau, Add) {
-  List<T> list1, list2;
+  List<T> list1(0, SPARSE), list2(0, SPARSE);
   for (auto i = 0; i < 16; i += 1) {
     list1.Append(i, 1);
     list2.Append(i, i);
+    EXPECT_EQ(list1.At(i), 1);
+    EXPECT_EQ(list2.At(i), i);
   }
   Tableau<T> *tableau1 = list1.Cross(&list2, 16, 16);
+  for (auto i = 0; i < 16; i++) {
+    for (auto j = 0; j < 16; j++) {
+      EXPECT_EQ(tableau1->At(i, j), j);
+    }
+  }
   Tableau<T> *tableau2 = list1.Cross(&list1, 16, 16);
+  for (auto i = 0; i < 16; i++) {
+    for (auto j = 0; j < 16; j++) {
+      EXPECT_EQ(tableau2->At(i, j), 1);
+    }
+  }
   tableau1->Add(tableau2);
   for (auto i = 0; i < 16; i++) {
     for (auto j = 0; j < 16; j++) {
@@ -188,12 +200,17 @@ TEST(Tableau, Add) {
 }
 
 TEST(Tableau, AddSparseTableau) {
-  List<T> list1, list2;
+  List<T> list1(0, SPARSE), list2(0, SPARSE);
   for (auto i = 0; i < 16; i += 1) {
     list1.Append(i, 1);
     list2.Append(i, i);
   }
   Tableau<T> *tableau1 = list1.Cross(&list2, 16, 16);
+  for (auto i = 0; i < 16; i++) {
+    for (auto j = 0; j < 16; j++) {
+      EXPECT_EQ(tableau1->At(i, j), j);
+    }
+  }
   SparseTableau<T> *tableau2 = list1.SparseCross(&list1);
   tableau1->Add(tableau2);
   for (auto i = 0; i < 16; i++) {
@@ -232,5 +249,25 @@ TEST(Tableau, AppendCol) {
     for (auto j = 0; j < 16; j++) {
       EXPECT_EQ(tableau->At(i, j), i + j);
     }
+  }
+}
+
+TEST(Tableau, SumScaledRows) {
+  Tableau<T> *tableau = new Tableau<T>(16, 1024, ROW_ONLY);
+  for (auto i = 0; i < 16; i++) {
+    List<T> *list = new List<T>();
+    for (auto j = 0; j < 128; j++) {
+      list->Append(j * 8, i);
+    }
+    tableau->AppendRow(i, list);
+  }
+  List<T> *scale = new List<T>(16, DENSE);
+  for (auto i = 0; i < 16; i++) scale->Append(i, 1.0);
+  auto sum = tableau->SumScaledRows(scale);
+  for (auto i = 0; i < 1024; i++) {
+    if (i % 8 == 0)
+      EXPECT_EQ(sum->At(i), (0 + 15) * 16 / 2);
+    else
+      EXPECT_LE(abs(sum->At(i)), 1e-20);
   }
 }
