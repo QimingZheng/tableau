@@ -46,7 +46,12 @@ class List {
    public:
     Iterator(List<T>* list) : list_(list) { index_ = 0; }
 
-    tableau_index_t Index() { return list_->index_[index_]; }
+    tableau_index_t Index() {
+      if (list_->StorageFormat() == SPARSE)
+        return list_->index_[index_];
+      else
+        return index_;
+    }
     T Data() { return list_->data_[index_]; }
 
     Iterator* Next() {
@@ -76,7 +81,10 @@ class List {
     } else {
       size_ = size;
       capacity_ = size;
-      if (size > 0) data_ = new T[capacity_];
+      if (size > 0) {
+        data_ = new T[capacity_];
+        for (auto i = 0; i < capacity_; i++) data_[i] = 0;
+      }
     }
   }
   ~List() {
@@ -633,14 +641,10 @@ class Tableau {
     }
   }
   List<T>* SumScaledRows(List<T>* scale) {
-    assert_msg(scale->StorageFormat() == DENSE,
-               "Scale List must be in Dense format");
-    assert_msg(Rows() == scale->Size(),
-               "Tableau Rows must equals to scale List size");
     List<T>* ret = new List<T>(columns_, DENSE);
     if (StorageFormat() == ROW_ONLY or StorageFormat() == ROW_AND_COLUMN) {
-      for (tableau_index_t row = 0; row < rows_; row++)
-        ret->AddScaled(Row(row), scale->At(row), true);
+      for (auto iter = scale->Begin(); !iter->IsEnd(); iter = iter->Next())
+        ret->AddScaled(Row(iter->Index()), iter->Data(), true);
       return ret;
     } else {
       for (tableau_index_t col = 0; col < columns_; col++)
@@ -817,7 +821,7 @@ SparseTableau<T>* List<T>::SparseCross(const List<T>* other,
 #pragma omp parallel for
     for (tableau_index_t i = 0; i < Size(); i++) {
       List<T>* row = new List<T>(other);
-      tableau_index_t index = index_[i];
+      tableau_index_t index = (StorageFormat() == SPARSE) ? index_[i] : i;
       T scale = data_[i];
       row->Scale(scale);
       sparse_tableau->SetRow(i, index, row);
@@ -827,7 +831,8 @@ SparseTableau<T>* List<T>::SparseCross(const List<T>* other,
 #pragma omp parallel for
     for (tableau_index_t i = 0; i < other->Size(); i++) {
       List<T>* col = new List<T>(this);
-      tableau_index_t index = other->index_[i];
+      tableau_index_t index =
+          (StorageFormat() == SPARSE) ? other->index_[i] : i;
       T scale = other->data_[i];
       col->Scale(scale);
       sparse_tableau->SetCol(i, index, col);
