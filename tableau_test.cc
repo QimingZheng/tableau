@@ -271,3 +271,23 @@ TEST(Tableau, SumScaledRows) {
       EXPECT_LE(abs(sum->At(i)), 1e-20);
   }
 }
+
+TEST(Tableau, SumScaledRows2) {
+  Tableau<T> *tableau = new Tableau<T>(16, 1024, COLUMN_ONLY);
+  for (auto i = 0; i < 16; i++) {
+    List<T> *list = new List<T>();
+    for (auto j = 0; j < 128; j++) {
+      list->Append(j * 8, i);
+    }
+    tableau->AppendRow(i, list);
+  }
+  List<T> *scale = new List<T>(16, DENSE);
+  for (auto i = 0; i < 16; i++) scale->Append(i, 1.0);
+  auto sum = tableau->SumScaledRows(scale);
+  for (auto i = 0; i < 1024; i++) {
+    if (i % 8 == 0)
+      EXPECT_EQ(sum->At(i), (0 + 15) * 16 / 2);
+    else
+      EXPECT_LE(abs(sum->At(i)), 1e-20);
+  }
+}

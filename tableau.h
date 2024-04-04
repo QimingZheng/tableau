@@ -635,16 +635,18 @@ class Tableau {
   List<T>* SumScaledRows(List<T>* scale) {
     assert_msg(scale->StorageFormat() == DENSE,
                "Scale List must be in Dense format");
-    assert_msg(StorageFormat() == ROW_ONLY or StorageFormat() == ROW_AND_COLUMN,
-               "Only ROW_ONLY or ROW_AND_COLUMN format tableau can call "
-               "SumScaledRows");
     assert_msg(Rows() == scale->Size(),
                "Tableau Rows must equals to scale List size");
     List<T>* ret = new List<T>(columns_, DENSE);
-    for (tableau_index_t row = 0; row < rows_; row++) {
-      ret->AddScaled(Row(row), scale->At(row), true);
+    if (StorageFormat() == ROW_ONLY or StorageFormat() == ROW_AND_COLUMN) {
+      for (tableau_index_t row = 0; row < rows_; row++)
+        ret->AddScaled(Row(row), scale->At(row), true);
+      return ret;
+    } else {
+      for (tableau_index_t col = 0; col < columns_; col++)
+        ret->Set(col, scale->Dot(Col(col)));
+      return ret;
     }
-    return ret;
   }
 
   tableau_size_t Rows() const { return rows_; }
