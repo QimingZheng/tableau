@@ -648,6 +648,16 @@ class Tableau {
       return ret;
     }
   }
+  List<T>* Times(List<T>* x) {
+    assert_msg(StorageFormat() == ROW_ONLY or StorageFormat() == ROW_AND_COLUMN,
+               "Scale List must be in Dense format");
+    if (x->StorageFormat() == DENSE) assert(Cols() == x->Size());
+    List<T>* ret = new List<T>(rows_, DENSE);
+    for (tableau_index_t row = 0; row < rows_; row++) {
+      ret->Set(row, Row(row)->Dot(x));
+    }
+    return ret;
+  }
 
   tableau_size_t Rows() const { return rows_; }
   tableau_size_t Cols() const { return columns_; }

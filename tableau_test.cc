@@ -291,3 +291,20 @@ TEST(Tableau, SumScaledRows2) {
       EXPECT_LE(abs(sum->At(i)), 1e-20);
   }
 }
+
+TEST(Tableau, Times) {
+  Tableau<T> *tableau = new Tableau<T>(16, 1024, ROW_ONLY);
+  for (auto i = 0; i < 16; i++) {
+    List<T> *list = new List<T>();
+    for (auto j = 0; j < 128; j++) {
+      list->Append(j * 8, 1);
+    }
+    tableau->AppendRow(i, list);
+  }
+  List<T> *x = new List<T>(1024, DENSE);
+  for (auto i = 0; i < 1024; i++) x->Append(i, 1.0);
+  auto result = tableau->Times(x);
+  for (auto i = 0; i < 16; i++) {
+    EXPECT_EQ(result->At(i), 128);
+  }
+}
