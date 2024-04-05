@@ -145,6 +145,18 @@ class List {
     }
   }
 
+  void Erase(tableau_index_t index) {
+    assert(StorageFormat() == SPARSE);
+    tableau_index_t pos = BinarySearch(index);
+    if (pos >= 0) {
+      for (auto i = pos + 1; i < size_; i++) {
+        data_[i - 1] = data_[i];
+        index_[i - 1] = index_[i] - 1;
+      }
+      size_ -= 1;
+    }
+  }
+
   void Add(const List<T>* other) { AddScaled(other, 1, false); }
   void AddScaled(const List<T>* other, T scale, bool enable_scale) {
     if (StorageFormat() == SPARSE and other->StorageFormat() == SPARSE) {
