@@ -659,6 +659,7 @@ class Tableau {
         ret->AddScaled(Row(iter->Index()), iter->Data(), true);
       return ret;
     } else {
+#pragma omp parallel
       for (tableau_index_t col = 0; col < columns_; col++)
         ret->Set(col, scale->Dot(Col(col)));
       return ret;
@@ -669,9 +670,9 @@ class Tableau {
                "Scale List must be in Dense format");
     if (x->StorageFormat() == DENSE) assert(Cols() == x->Size());
     List<T>* ret = new List<T>(rows_, DENSE);
-    for (tableau_index_t row = 0; row < rows_; row++) {
+#pragma omp parallel
+    for (tableau_index_t row = 0; row < rows_; row++)
       ret->Set(row, Row(row)->Dot(x));
-    }
     return ret;
   }
 
