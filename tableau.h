@@ -258,6 +258,24 @@ class List {
   }
 
   template <typename R>
+  List<R>* Map(
+      std::function<R(const tableau_index_t&, const T&)> transform) const {
+    List<R>* list = new List<R>(Size(), StorageFormat());
+    if (StorageFormat() == SPARSE) {
+      for (tableau_index_t i = 0; i < Size(); i++) list->Append(index_[i], 0);
+#pragma omp parallel for
+      for (tableau_index_t i = 0; i < Size(); i++)
+        list->Set(index_[i], transform(index_[i], data_[i]));
+    } else {
+#pragma omp parallel for
+      for (tableau_index_t i = 0; i < Size(); i++) {
+        list->Set(i, transform(i, data_[i]));
+      }
+    }
+    return list;
+  }
+
+  template <typename R>
   List<R>* Map(R (*transform)(const T&)) const {
     List<R>* list = new List<R>(Size(), StorageFormat());
     if (StorageFormat() == SPARSE) {
@@ -379,6 +397,9 @@ class List {
 
   template <typename U>
   friend class SparseTableau;
+
+  template <typename U>
+  friend class List;
 
  private:
   tableau_size_t size_ = 0;
